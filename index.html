@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Segovia AR - Time Travel</title>
+  <!-- A-Frame & AR.js libraries for camera and GPS with zero installation -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
+    .ui-top {
+      position: fixed; top: 15px; left: 15px; right: 15px; z-index: 10;
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(20, 20, 20, 0.75); color: #fff; padding: 10px 15px;
+      border-radius: 12px; backdrop-filter: blur(6px);
+    }
+    .ui-bottom {
+      position: fixed; bottom: 20px; left: 15px; right: 15px; z-index: 10;
+      display: flex; gap: 10px; justify-content: center;
+    }
+    button {
+      background: #d97706; color: white; border: none; padding: 12px 18px;
+      border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer;
+    }
+    button.secondary { background: rgba(30, 41, 59, 0.9); border: 1px solid #64748b; }
+    .modal {
+      display: none; position: fixed; bottom: 80px; left: 15px; right: 15px;
+      background: white; color: #1e293b; padding: 18px; border-radius: 14px;
+      z-index: 20; box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    }
+    .modal h3 { margin: 0 0 8px 0; color: #b45309; }
+    .route-item { padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Status Bar -->
+  <div class="ui-top">
+    <span id="current-spot">📍 Point camera at monument</span>
+    <span id="gps-status" style="font-size: 12px; color: #fbbf24;">Searching GPS...</span>
+  </div>
+
+  <!-- Pop-up Modal: Fun Facts -->
+  <div id="modal-facts" class="modal">
+    <h3>🏛️ Did you know...?</h3>
+    <p id="fact-text">The 20,400 granite blocks of the Aqueduct stand without any mortar or cement, held together solely by a perfect balance of forces and friction.</p>
+    <button onclick="closeModals()" style="width:100%; margin-top:10px;">Close</button>
+  </div>
+
+  <!-- Pop-up Modal: Available AR Routes -->
+  <div id="modal-routes" class="modal">
+    <h3>🗺️ AR Scan Points</h3>
+    <div id="routes-list"></div>
+    <button onclick="closeModals()" style="width:100%; margin-top:10px;">Close</button>
+  </div>
+
+  <!-- Bottom Action Buttons -->
+  <div class="ui-bottom">
+    <button onclick="openModal('modal-facts')">💡 Fun Fact</button>
+    <button class="secondary" onclick="openModal('modal-routes')">🗺️ View AR Route</button>
+  </div>
+
+  <!-- Augmented Reality Camera Scene -->
+  <a-scene vr-mode-ui="enabled: false" embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+    
+    <!-- 3D Reconstruction Overlay (Granite pillar & Roman wooden centering) -->
+    <a-entity position="0 0 -6">
+      <a-box position="0 1 0" width="1.2" height="3" depth="1.2" color="#8c867e" opacity="0.85"></a-box>
+      <a-torus position="1.2 2.5 0" radius="0.9" radius-tubular="0.1" arc="180" color="#78350f"></a-torus>
+      <a-text value="Built: 1st Century AD\nNo mortar used" position="-0.8 3.2 0" color="#fbbf24" width="4"></a-text>
+    </a-entity>
+
+    <a-camera gps-camera rotation-reader></a-camera>
+  </a-scene>
+
+  <script>
+    // Route points in Segovia with real GPS coordinates
+    const routePoints = [
+      {
+        name: "1. Plaza del Azoguejo (Base)",
+        lat: 40.9480, lon: -4.1177,
+        fact: "Here the aqueduct reaches its maximum height: 28.5 meters (93.5 ft) with a double tier of arches."
+      },
+      {
+        name: "2. Postigo del Consuelo (Viewpoint)",
+        lat: 40.9486, lon: -4.1183,
+        fact: "From this elevated spot you can see the upper water channel (specus) that carried water from the mountains."
+      },
+      {
+        name: "3. San Gabriel Settling Tank",
+        lat: 40.9455, lon: -4.1135,
+        fact: "Sand and impurities settled in this basin before the water entered the elevated arches."
+      }
+    ];
+
+    // Check phone location and calculate distance to route spots
+    if ("geolocation" in navigator) {
+      navigator.geolocation.watchPosition(pos => {
+        const userLat = pos.coords.latitude;
+        const userLon = pos.coords.longitude;
+        document.getElementById('gps-status').textContent = "GPS Active";
+        updateRoutesList(userLat, userLon);
+      }, () => {
+        document.getElementById('gps-status').textContent = "No GPS permission";
+        updateRoutesList(null, null);
+      });
+    }
+
+    function updateRoutesList(uLat, uLon) {
+      const container = document.getElementById('routes-list');
+      container.innerHTML = "";
+      routePoints.forEach(p => {
+        let distText = "Available";
+        if (uLat && uLon) {
+          const d = calculateDistance(uLat, uLon, p.lat, p.lon);
+          distText = d < 1000 ? `${Math.round(d)} m` : `${(d/1000).toFixed(1)} km`;
+          if (d < 40) {
+            document.getElementById('current-spot').textContent = `📍 You are at: ${p.name}`;
+            document.getElementById('fact-text').textContent = p.fact;
+          }
+        }
+        container.innerHTML += `
+          <div class="route-item">
+            <span><strong>${p.name}</strong></span>
+            <span style="color:#d97706; font-weight:bold;">${distText}</span>
+          </div>`;
+      });
+    }
+
+    // Haversine formula to calculate distance in meters between GPS coordinates
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+      const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+      const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function openModal(id) {
+      closeModals();
+      document.getElementById(id).style.display = 'block';
+    }
+    function closeModals() {
+      document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+
+    updateRoutesList(null, null);
+  </script>
+</body>
+</html>
